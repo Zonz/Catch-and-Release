@@ -1,2 +1,6 @@
 # Catch-and-Release
-The all-in-one script for catching Pokémon and releasing the garbage ones!
+Pathfinder is required for this to function!
+
+Put config.lua and Catch_and_Release.lua into the same directory as Pathfinder.
+
+PROShine-2.3.2.0\Scripts\ProShinePathfinder-master
