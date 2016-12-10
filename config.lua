@@ -52,12 +52,6 @@ tossWrongHP = false
 -- Hidden Power types to look for - ignore this if tossWrongHP = false   ---   Remember that any Pokémon in catchList without one of these HP types will get released, so be careful
 hpTypes = { "Fire" }
 
--- Use items to heal our Pokémon instead of going to the Pokécenter to heal? - Useful for the Safari Zone or the Moon
-useItems = false
-
--- Names of items to use   ---   {Reviving, Healing, Restoring PP, Paralysis, Poison}   ---   Use "" for a particular item to never use that type
-items = {"Revive", "Hyper Potion", "Leppa Berry", "Lum Berry", "Lum Berry"}
-
 -- Attack Pokémon that we're not catching?
 farm = true
 
@@ -67,6 +61,15 @@ farmer = 2
 
 -- If farm = true, we will only attack Pokémon that give this EV - "HP", "ATK", "DEF", "SPATK", "SPDEF", or "SPD"   ---   use "", nil, or false to attack everything
 evToTrain = ""
+
+-- Use items to heal our Pokémon instead of going to the Pokécenter to heal? - Useful for the Safari Zone or the Moon
+useItems = false
+
+-- Names of items to use   ---   {Reviving, Healing, Restoring PP, Paralysis, Poison}   ---   Use "" for a particular item to never use that type
+items = {"Revive", "Hyper Potion", "Leppa Berry", "Lum Berry", "Lum Berry"}
+
+-- Head to the Pokécenter when one of our Pokémon is Paralyzed or Poisoned?
+healWhenStatused = false
 
 -- Catch Pokémon we've never caught before?
 catchNotCaught = false
@@ -106,10 +109,13 @@ minutesToMove = 30
 -- Name of the rod you're going to use if you're fishing
 rod = "Super Rod"
 
--- Minimum number of Pokéballs to keep - if we have less than this number, we go buy some   ---   use 0 to forget about this
-pokeballMin = 100
+-- The type of Pokeball to use - "Pokeball", "Great Ball", or "Ultra Ball"
+ballType = "Pokeball"
 
--- Number of Pokéballs to buy when we go to the the mart
+-- Minimum number of balls to keep - if we have less than this number, we go buy some   ---   use 0 to forget about this
+ballMin = 100
+
+-- Number of balls to buy when we go to the the mart
 buyAmount = 50
 
 -- Minimum amount of money to start farming at - useful if you're using the Safari Zone a lot - set to 0 to never farm for money
