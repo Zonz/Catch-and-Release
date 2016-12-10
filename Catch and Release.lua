@@ -1,11 +1,11 @@
-name = "Catch and Release v1.0"
+name = "Catch and Release v1.1"
 author = "Zonz"
-description = "This script hunts for a set of user-defined Pokémon and releases the 'bad' ones. See config for details."
+description = "This script hunts for a set of user-defined Pokémon and releases the \"bad\" ones. See config for details."
 
 pf = require "Pathfinder/MoveToApp"
 dofile "config.lua"
 
-function onStart()	
+function onStart()
 	
 	-- Converting strings to Title Case so they can be non-case sensitive
 	weakMove = toTitleCase(weakMove)
@@ -17,6 +17,7 @@ function onStart()
 	hpTypes = toTitleCase(hpTypes)
 	items = toTitleCase(items)
 	rod = toTitleCase(rod)
+	ballType = toTitleCase(ballType)
 	morningSync = toTitleCase(morningSync)
 	daySync = toTitleCase(daySync)
 	nightSync = toTitleCase(nightSync)
@@ -74,7 +75,7 @@ function onStart()
 	if (tossWrongAbility or rolePlayUser > 0) and not abilities[1] then return fatal("Error: Please define at least 1 ability") end
 	if tossWrongHP and not hpTypes[1] then return fatal("Error: Please define at least 1 HP Type") end
 	
-	if pokeballMin > 0 and buyAmount < 1 then return fatal("Error: Invalid buyAmount - please check config") end
+	if ballMin > 0 and buyAmount < 1 then return fatal("Error: Invalid buyAmount - please check config") end
 	
 	if (type(morningArea) == "table" and #morningArea != 2 and #morningArea % 4 != 0)
 	or (type(morningArea) == "string" and morningArea:upper() != "GRASS" and morningArea:upper() != "WATER") then
@@ -91,15 +92,17 @@ function onStart()
 		then return fatal("Error: Invalid nightArea - please check config")
 	end
 	
-	if (type(farmArea) == "table" and #farmArea != 2 and #farmArea % 4 != 0)
-	or (type(farmArea) == "string" and farmArea:upper() != "GRASS" and farmArea:upper() != "WATER")
-		then return fatal("Error: Invalid farmArea - please check config")
+	if minMoney > 0 then
+		if (type(farmArea) == "table" and #farmArea != 2 and #farmArea % 4 != 0)
+		or (type(farmArea) == "string" and farmArea:upper() != "GRASS" and farmArea:upper() != "WATER")
+			then return fatal("Error: Invalid farmArea - please check config")
+		end
 	end
 	
 	if ((type(morningArea) == "table" and #morningArea == 2)
 	or (type(dayArea) == "table" and #dayArea == 2)
 	or (type(nightArea) == "table" and #nightArea == 2)
-	or (type(farmArea) == "table" and #farmArea == 2))
+	or (type(farmArea) == "table" and #farmArea == 2 and minMoney > 0))
 	and not hasItem(rod) then
 		return fatal("Error: " .. rod .. " not in inventory - please check config")
 	end
@@ -125,6 +128,8 @@ function onStart()
 		if not inTable(natures, daySync) then log("Warning: daySync (" .. daySync .. ") is not present in the given list of natures") end
 		if not inTable(natures, nightSync) then log("Warning: nightSync (" .. nightSync .. ") is not present in the given list of natures") end
 	end
+	
+	if ballType != "Pokeball" and ballType != "Great Ball" and ballType != "Ultra Ball" then return fatal("Error: Invalid ballType - please check config") end
 	
 	----------------------------------------------------------------------------------------------------------------------------------------------------------
 	
@@ -167,6 +172,7 @@ function onStart()
 	timerRoot = os.time() -- For use in timer()
 	startTime = os.time() -- For use in runningTime()
 	rectTimer = os.time() -- For use in updateTargetRect()
+	startMoney = getMoney()
 	statusMoveUserDefault = statusMoveUser -- This is used to reset the statusMoveUser value in case we used Spore on a Grass-type - see onBattleMessage()
 	
 	catchCounter = {} -- Holds the name of each Pokémon and the amount we've caught of them
@@ -195,7 +201,7 @@ function onStart()
 		if minIVs[5] > 0 then log("Will release " .. formattedTable(catchList) .. " with a Speed IV lower than " .. minIVs[5] .. "!") end
 		if minIVs[6] > 0 then log("Will release " .. formattedTable(catchList) .. " with an HP IV lower than " .. minIVs[6] .. "!") end
 		log("Please be sure to check the config!")
-		if exceptionCatches[1] then log("Pokemon to hunt for that will not get released: " .. formattedTable(exceptionCatches) .. ".") end
+		if exceptionCatches[1] then log("Pokémon to hunt for that will not get released: " .. formattedTable(exceptionCatches) .. ".") end
 	else
 		if catchList[1] or exceptionCatches[1] then 
 			log("Hunting for " .. formattedTable(tableConcat(catchList, exceptionCatches)) .. ".")
@@ -227,8 +233,8 @@ function onPathAction()
 		return retrievePokemon("Cut")
 	end
 	
-	if getItemQuantity("Pokeball") == 0 then
-		fatal("Out of Pokeballs - stopping script")
+	if getItemQuantity(ballType) == 0 then
+		fatal("Out of " .. ballType .. "s - stopping script")
 	end
 	
 	if not farming then		
@@ -350,14 +356,46 @@ function onPathAction()
 			end
 		end
 	elseif getMoney() >= moneyStop or minMoney == 0 then
-		if isMorning() then log("Done farming - returning to " .. morningMap .. ".") end
-		if isNoon() then log("Done farming - returning to " .. dayMap .. ".") end
-		if isNight() then log("Done farming - returning to " .. nightMap .. ".") end
+		if isMorning() then
+			log("Done farming - returning to " .. morningMap .. ".")
+			lastMessage2 = "Heading to " .. morningMap .. "."
+		elseif isNoon() then
+			log("Done farming - returning to " .. dayMap .. ".")
+			lastMessage2 = "Heading to " .. dayMap .. "."
+		else
+			log("Done farming - returning to " .. nightMap .. ".")
+			lastMessage2 = "Heading to " .. nightMap .. "."
+		end
 		farming = false
-		if farmerID and weakMoveUser == 1 then weakMoveUser = tmpID end
-		if farmerID and statusMoveUser == 1 then statusMoveUser = tmpID end
-		statusMoveUserDefault = statusMoveUser
-		if farmerID then return swapPokemon(tmpID, 1) end
+		if farmerID then
+			if weakMoveUser == 1 then weakMoveUser = tmpID end
+			if statusMoveUser == 1 then statusMoveUser = tmpID end
+			statusMoveUserDefault = statusMoveUser
+			return swapPokemon(tmpID, 1)
+		end
+	else
+		if farmerID then
+			if getPokemonUniqueId(1) != farmerID then
+				if findUniqueIdInParty(farmerID) then
+					tmpID = findUniqueIdInParty(farmerID)
+					if weakMoveUser == tmpID then weakMoveUser = 1 end
+					if statusMoveUser == tmpID then statusMoveUser = 1 end
+					statusMoveUserDefault = statusMoveUser
+					return swapPokemon(tmpID, 1)
+				else
+					logOnce("Heading to the nearest PC to get our farmer Pokémon.")
+					return retrievePokemon(farmerID)
+				end
+			end
+		end
+	end
+	
+	if isMorning() then
+		logOnce("It is now Morning.")
+	elseif isNoon() then
+		logOnce("It is now Daytime.")
+	else
+		logOnce("It is now Nighttime.")
 	end
 	
 	if weakMoveUser > 0 and not findMove(weakMove) then -- If we stored our weakMove user when moving Syncs around (it shouldn't happen, but just in case)
@@ -396,7 +434,6 @@ function onPathAction()
 		end
 	elseif isMorning() then
 		location = morningMap
-		logOnce("It is now Morning.")
 		if getPokemonNature(1) != morningSync or getPokemonAbility(1) != "Synchronize" or (rolePlayAsWell and not hasMove(1, "Role Play")) then
 			if findPokemonWithSync(morningSync) then
 				if rolePlayAsWell and rolePlayUser > 0 then
@@ -416,7 +453,6 @@ function onPathAction()
 		end
 	elseif isNoon() then
 		location = dayMap
-		logOnce("It is now Daytime.")
 		if getPokemonNature(1) != daySync or getPokemonAbility(1) != "Synchronize" or (rolePlayAsWell and not hasMove(1, "Role Play")) then
 			if findPokemonWithSync(daySync) then
 				if rolePlayAsWell and rolePlayUser > 0 then
@@ -436,7 +472,6 @@ function onPathAction()
 		end
 	elseif isNight() then
 		location = nightMap
-		logOnce("It is now Nighttime.")
 		if getPokemonNature(1) != nightSync or getPokemonAbility(1) != "Synchronize" or (rolePlayAsWell and not hasMove(1, "Role Play")) then
 			if findPokemonWithSync(nightSync) then
 				if rolePlayAsWell and rolePlayUser > 0 then
@@ -456,8 +491,8 @@ function onPathAction()
 		end
 	end
 	
-	if getItemQuantity("Pokeball") < pokeballMin then
-		return pf.useNearestPokemart(getMapName(), "Pokeball", buyAmount)
+	if getItemQuantity(ballType) < ballMin then
+		return pf.useNearestPokemart(getMapName(), ballType, buyAmount)
 	else
 	
 		if useItems then
@@ -505,7 +540,15 @@ function onPathAction()
 				end
 			elseif not pf.moveTo(getMapName(), location) then
 				pcUsed = false
-				return moveToArea()
+				if farming then
+					return moveToArea(farmArea)
+				elseif isMorning() then
+					return moveToArea(morningArea)
+				elseif isNoon() then
+					return moveToArea(dayArea)
+				elseif isNight() then
+					return moveToArea(nightArea)
+				end
 			end
 			
 		else
@@ -531,73 +574,25 @@ function onPathAction()
 end
 
 
-function moveToArea()
+function moveToArea(area)
 	
-	local spot = ""
-	
-	if farming then
-		if type(farmArea) == "string" then
-			spot = farmArea:upper()
+	if type(area) == "string" then
+		if area:upper() == "GRASS" then
+			return moveToGrass()
 		else
-			if #farmArea == 2 then
-				return updateFishing(farmArea)
-			elseif #farmArea > 4 then
-				return updateTargetRect(farmArea)
-			elseif farmArea[1] == farmArea[3] or farmArea[2] == farmArea[4] then
-				return moveToLine(farmArea)
-			else
-				return moveToRectangle(farmArea[1], farmArea[2], farmArea[3], farmArea[4])
-			end
-		end		
-	elseif isMorning() then
-		if type(morningArea) == "string" then
-			spot = morningArea:upper()
+			return moveToWater()
+		end
+	else
+		if #area == 2 then
+			return updateFishing(area)
+		elseif #area > 4 then
+			return updateTargetRect(area)
+		elseif area[1] == area[3] or area[2] == area[4] then
+			return moveToLine(area)
 		else
-			if #morningArea == 2 then
-				return updateFishing(morningArea)
-			elseif #morningArea > 4 then
-				return updateTargetRect(morningArea)
-			elseif morningArea[1] == morningArea[3] or morningArea[2] == morningArea[4] then
-				return moveToLine(morningArea)
-			else
-				return moveToRectangle(morningArea[1], morningArea[2], morningArea[3], morningArea[4])
-			end
-		end		
-	elseif isNoon() then
-		if type(dayArea) == "string" then
-			spot = dayArea:upper()
-		else
-			if #dayArea == 2 then
-				return updateFishing(dayArea)
-			elseif #dayArea > 4 then
-				return updateTargetRect(dayArea)
-			elseif dayArea[1] == dayArea[3] or dayArea[2] == dayArea[4] then
-				return moveToLine(dayArea)
-			else
-				return moveToRectangle(dayArea[1], dayArea[2], dayArea[3], dayArea[4])
-			end
-		end		
-	elseif isNight() then
-		if type(nightArea) == "string" then
-			spot = nightArea:upper()
-		else
-			if #nightArea == 2 then
-				return updateFishing(nightArea)
-			elseif #nightArea > 4 then
-				return updateTargetRect(nightArea)
-			elseif nightArea[1] == nightArea[3] or nightArea[2] == nightArea[4] then
-				return moveToLine(nightArea)
-			else
-				return moveToRectangle(nightArea[1], nightArea[2], nightArea[3], nightArea[4])
-			end
-		end		
-	end
-	
-	if spot == "GRASS" then
-		return moveToGrass()
-	elseif spot == "WATER" then
-		return moveToWater()
-	end
+			return moveToRectangle(area[1], area[2], area[3], area[4])
+		end
+	end		
 	
 end
 
@@ -743,8 +738,8 @@ function retrievePokemon(var)
 									end
 								else
 									if rolePlayUser == 4 then
-										sixthPoke = getPokemonUniqueIdFromPC(currentBoxId, i)
 										if getTeamSize() == 6 then
+											sixthPoke = getPokemonUniqueIdFromPC(currentBoxId, i)
 											swapPokemonFromPC(currentBoxId, i, 6)
 										else
 											withdrawPokemonFromPC(currentBoxId, i)
@@ -838,7 +833,7 @@ function checkPC()
 					else
 						log("This " .. getPokemonNameFromPC(releaseBoxId, i) .. " is not usable. Attempting to release...")
 						if getTeamSize() == 6 then
-							if not sixthPoke then sixthPoke = getPokemonUniqueIdFromPC(releaseBoxId, i) end
+							if not sixthPoke then sixthPoke = getPokemonUniqueId(6) end
 							swapPokemonFromPC(releaseBoxId, i, 6)
 						else
 							withdrawPokemonFromPC(releaseBoxId, i)
@@ -859,17 +854,19 @@ end
 
 function releaseFromTeam()
 	
-	if getPokemonHeldItem(6) then
-		log("Retrieving " .. getPokemonHeldItem(6) .. " from " .. getPokemonName(6) .. "...")
-		return takeItemFromPokemon(6)
-	end
-	
 	if not timerSwitch then return end
-	if getTeamSize() == 6 then
+	if getTeamSize() == 6 then	
+		if getPokemonHeldItem(6) then
+			log("Retrieving " .. getPokemonHeldItem(6) .. " from " .. getPokemonName(6) .. "...")
+			return takeItemFromPokemon(6)
+		end
 		if checkCatchList[getPokemonName(6)] then -- Just to make sure nothing funky happened when switching Pokémon from the PC
 			log("...")
 			timerSwitch = false
 			return releasePokemonFromTeam(6)
+		else
+			releasing = false
+			return
 		end
 	else
 		log("Release succesful")
@@ -969,10 +966,10 @@ function onBattleAction()
 						elseif getOpponentStatus() != "SLEEP" and getOpponentStatus() != "PARALIZE" then
 							return useMove(statusMove) or run() or sendUsablePokemon()
 						else
-							return useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
+							return useItem(ballType) or useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
 						end
 					else
-						return useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
+						return useItem(ballType) or useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
 					end
 					
 				elseif statusMoveUser > 0 then
@@ -982,16 +979,16 @@ function onBattleAction()
 					elseif getOpponentStatus() != "SLEEP" and getOpponentStatus() != "PARALIZE" then
 						return useMove(statusMove) or run() or sendUsablePokemon()
 					else
-						return useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
+						return useItem(ballType) or useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
 					end
 					
 				else
-					return useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
+					return useItem(ballType) or useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
 				end
 				
 			else																		-- Opponent had the wrong ability
 			
-				if (farm and (not evToTrain or evToTrain == "" or isOpponentEffortValue(evToTrain))) and hasGoodMoves(getActivePokemonNumber()) then	-- We're gonna kill it
+				if farm and (not evToTrain or evToTrain == "" or isOpponentEffortValue(evToTrain)) and hasGoodMoves(getActivePokemonNumber()) then	-- We're gonna kill it
 					if farmer > 0 and getActivePokemonNumber() != farmer then
 						pokemonHealth = 0
 						return sendPokemon(farmer) or sendUsablePokemon() or run()		-- Sending farmer
@@ -1021,10 +1018,10 @@ function onBattleAction()
 					elseif getOpponentStatus() != "SLEEP" and getOpponentStatus() != "PARALIZE" then
 						return useMove(statusMove) or run() or sendUsablePokemon()
 					else
-						return useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
+						return useItem(ballType) or useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
 					end
 				else
-					return useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
+					return useItem(ballType) or useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
 				end
 				
 			elseif statusMoveUser > 0 then
@@ -1034,11 +1031,11 @@ function onBattleAction()
 				elseif getOpponentStatus() != "SLEEP" and getOpponentStatus() != "PARALIZE" then
 					return useMove(statusMove) or run() or sendUsablePokemon()
 				else
-					return useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
+					return useItem(ballType) or useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
 				end
 				
 			else
-				return useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
+				return useItem(ballType) or useItem("Pokeball") or useItem("Great Ball") or useItem("Ultra Ball") or run() or sendUsablePokemon()
 			end
 			
 		else 																	-- We're farming for money, and opponent is not in our exceptionCatches and is not shiny
@@ -1057,7 +1054,7 @@ function onBattleAction()
 				return run() or sendUsablePokemon() or attack()
 			end
 		else
-			if (farm and (not evToTrain or evToTrain == "" or isOpponentEffortValue(evToTrain))) and hasGoodMoves(getActivePokemonNumber()) then -- We're gonna kill it
+			if farm and (not evToTrain or evToTrain == "" or isOpponentEffortValue(evToTrain)) and hasGoodMoves(farmer) then -- We're gonna kill it
 				if farmer > 0 and getActivePokemonNumber() != farmer then
 					pokemonHealth = 0
 					return sendPokemon(farmer) or sendUsablePokemon() or run()						-- Sending farmer
@@ -1122,26 +1119,7 @@ function calculateHPType(boxIndex, pokeIndex)
 	spatk = (getPokemonIndividualValueFromPC(boxIndex, pokeIndex, "SPATK") % 2) * 16
 	spdef = (getPokemonIndividualValueFromPC(boxIndex, pokeIndex, "SPDEF") % 2) * 32
 	
-	hpType = math.floor(((hp + atk + def + spd + spatk + spdef) * 15) / 63)
-	
-		if hpType == 0 then return "Fighting"
-	elseif hpType == 1 then return "Flying"
-	elseif hpType == 2 then return "Poison"
-	elseif hpType == 3 then return "Ground"
-	elseif hpType == 4 then return "Rock"
-	elseif hpType == 5 then return "Bug"
-	elseif hpType == 6 then return "Ghost"
-	elseif hpType == 7 then return "Steel"
-	elseif hpType == 8 then return "Fire"
-	elseif hpType == 9 then return "Water"
-	elseif hpType == 10 then return "Grass"
-	elseif hpType == 11 then return "Electric"
-	elseif hpType == 12 then return "Psychic"
-	elseif hpType == 13 then return "Ice"
-	elseif hpType == 14 then return "Dragon"
-	elseif hpType == 15 then return "Dark"
-	else fatal("Error: Invalid HP type - stopping script")
-	end
+	return validHPTypes[math.floor(((hp + atk + def + spd + spatk + spdef) * 15) / 63) + 1]
 	
 end
 
@@ -1201,34 +1179,38 @@ end
 
 
 function runningTime()
-	runTime = math.floor(os.difftime(os.time(), startTime))
+	local runTime = math.floor(os.difftime(os.time(), startTime))
 	if runTime == 1 then
-		return log("Run Time: 1 second")
+		log("Run Time: 1 second")
 	elseif runTime < 60 then
-		return log("Run Time: " .. runTime .. " seconds")
+		log("Run Time: " .. runTime .. " seconds")
 	elseif math.floor(runTime / 60) == 1 then 
-		return log("Run Time: 1 minute")
+		log("Run Time: 1 minute")
 	elseif runTime < 3600 then
-		return log("Run Time: " .. math.floor(runTime / 60) .. " minutes")
+		log("Run Time: " .. math.floor(runTime / 60) .. " minutes")
 	elseif runTime == 3600 then 
-		return log("Run Time: 1 hour")
+		log("Run Time: 1 hour")
 	else
 		hour = math.floor(runTime / 3600)
 		minute = math.floor(runTime / 60) - (hour * 60)
 		if hour == 1 then
 			if minute == 1 then
-				return log("Run Time: 1 hour and 1 minute")
+				log("Run Time: 1 hour and 1 minute")
 			else
-				return log("Run Time: 1 hour and " .. minute .. " minutes")
+				log("Run Time: 1 hour and " .. minute .. " minutes")
 			end
 		else
 			if minute == 1 then
-				return log("Run Time: " .. hour .. " hours and 1 minute")
+				log("Run Time: " .. hour .. " hours and 1 minute")
 			else
-				return log("Run Time: " .. hour .. " hours and " .. minute .. " minutes")
+				log("Run Time: " .. hour .. " hours and " .. minute .. " minutes")
 			end
 		end
-	end	
+	end
+	if getMoney() - startMoney > 0 then
+		log("Money made: " .. getMoney() - startMoney)
+		log("Money per hour: " .. math.floor((getMoney() - startMoney) / (runTime / 3600)))
+	end
 end
 
 
@@ -1317,7 +1299,7 @@ end
 
 function invalidTable(list, validList)
 
-	-- returns the first value in list that is not present in validList
+	-- Returns the first value in list that is not present in validList
 	
 	for _, value in pairs(list) do
 		if not inTable(validList, value) then
@@ -1409,6 +1391,8 @@ end
 
 
 function checkStatus()
+
+	if not healWhenStatused then return true end
 	
 	-- Returns false if any Pokémon in the party has a status
 	
