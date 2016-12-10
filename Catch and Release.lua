@@ -940,9 +940,9 @@ function onBattleAction()
 		opponentHealth = getOpponentHealth()
 	end
 	
-	if isWildBattle() and (isOpponentShiny() or checkCatchList[getOpponentName()] or checkExceptions[getOpponentName()] or (catchNotCaught and not isAlreadyCaught())) then
+	if isWildBattle() and (isOpponentShiny() or getOpponentForm() != 0 or checkCatchList[getOpponentName()] or checkExceptions[getOpponentName()] or (catchNotCaught and not isAlreadyCaught())) then
 		
-		if rolePlayUser > 0 and not checkExceptions[getOpponentName()] and not isOpponentShiny() and not farming then -- Gonna use Role Play, unless opponent is one of our exceptionCatches or is shiny
+		if rolePlayUser > 0 and not checkExceptions[getOpponentName()] and not isOpponentShiny() and not farming and getOpponentForm() == 0 then -- Gonna use Role Play, unless opponent is one of our exceptionCatches or is shiny
 			if getActivePokemonNumber() != rolePlayUser and not rolePlayed then
 				pokemonHealth = 0
 				return sendPokemon(rolePlayUser) or run() or sendUsablePokemon()
@@ -1001,7 +1001,7 @@ function onBattleAction()
 				
 			end
 			
-		elseif not farming or checkExceptions[getOpponentName()] or isOpponentShiny() then -- Not gonna use Role Play, or opponent is one of our exceptionCatches, or is shiny
+		elseif not farming or checkExceptions[getOpponentName()] or isOpponentShiny() or getOpponentForm() != 0 then -- Not gonna use Role Play, or opponent is one of our exceptionCatches, or is shiny
 		
 			if weakMoveUser > 0 then
 				if getOpponentHealthPercent() > 30 then
